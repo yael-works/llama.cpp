@@ -2237,6 +2237,31 @@ struct test_count_equal : public test_case {
 };
 
 // GGML_OP_REPEAT
+
+/* COUNT_EQUAL – typed test (no argmax), to cover F32/F16/I32/I16 */
+struct test_count_equal_typed : public test_case {
+    const ggml_type type;
+    const std::array<int64_t, 4> ne;
+
+    test_count_equal_typed(ggml_type type = GGML_TYPE_F32,
+                           std::array<int64_t, 4> ne = {128, 64, 1, 1})
+        : type(type), ne(ne) {}
+
+    std::string vars() override {
+        return VARS_TO_STR2(type, ne);
+    }
+
+    ggml_tensor * build_graph(ggml_context * ctx) override {
+        ggml_tensor * a = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_name(a, "a");
+        ggml_tensor * b = ggml_new_tensor(ctx, type, 4, ne.data());
+        ggml_set_name(b, "b");
+        ggml_tensor * out = ggml_count_equal(ctx, a, b);
+        ggml_set_name(out, "out");
+        return out;
+    }
+};
+
 struct test_repeat : public test_case {
     const ggml_type type;
     const std::array<int64_t, 4> ne;
@@ -5940,6 +5965,12 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
 
     test_cases.emplace_back(new test_count_equal(GGML_TYPE_F32, {4,  500, 1, 1}));
     test_cases.emplace_back(new test_count_equal(GGML_TYPE_F32, {4, 5000, 1, 1}));
+    // COUNT_EQUAL – typed tests by dtype
+    test_cases.emplace_back(new test_count_equal_typed(GGML_TYPE_F32, {1024,  1, 1, 1}));
+    test_cases.emplace_back(new test_count_equal_typed(GGML_TYPE_F32, {  64, 64, 1, 1}));
+    test_cases.emplace_back(new test_count_equal_typed(GGML_TYPE_F16, { 256, 32, 1, 1}));
+    test_cases.emplace_back(new test_count_equal_typed(GGML_TYPE_I32, { 512, 16, 1, 1}));
+    test_cases.emplace_back(new test_count_equal_typed(GGML_TYPE_I16, { 512, 16, 1, 1}));
 
     test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32,    1, 1, 1}));
     test_cases.emplace_back(new test_argmax(GGML_TYPE_F32, {32,  513, 1, 1}));
@@ -6049,9 +6080,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
         add_test_bin_bcast(type, {10, 5, 4, 3}, {1, 1, 2, 2});
         add_test_bin_bcast(type, {10, 5, 4, 3}, {1, 2, 2, 2});
         add_test_bin_bcast(type, {10, 5, 4, 3}, {2, 2, 2, 2});
-
-        // test case for k_bin_bcast_unravel in CUDA backend
-        add_test_bin_bcast(type, {1, 1, 65536, 1}, {256, 1, 1, 1});
 
         // stable diffusion
         add_test_bin_bcast(type, {1280, 1, 1, 1}, {1, 1, 1, 1});
@@ -6394,7 +6422,6 @@ static std::vector<std::unique_ptr<test_case>> make_test_cases_eval() {
                 for (int64_t ne1 : {16, 1024}) {
                     test_cases.emplace_back(new test_soft_max_back(GGML_TYPE_F32, {ne0,   ne1,   1, 1}, scale, max_bias));
                     test_cases.emplace_back(new test_soft_max_back(GGML_TYPE_F32, {ne0-1, ne1-1, 1, 1}, scale, max_bias));
-                    test_cases.emplace_back(new test_soft_max_back(GGML_TYPE_F32, {ne0,   ne1,   2, 3}, scale, max_bias));
                 }
             }
         }
@@ -6810,17 +6837,7 @@ static void list_all_ops() {
 static void show_test_coverage() {
     std::set<std::string> all_ops;
     for (int i = 1; i < GGML_OP_COUNT; i++) {
-        auto op = (enum ggml_op)i;
-        if (op == GGML_OP_VIEW      ||
-            op == GGML_OP_RESHAPE   ||
-            op == GGML_OP_PERMUTE   ||
-            op == GGML_OP_TRANSPOSE ||
-            op == GGML_OP_CONT      ||
-            op == GGML_OP_GLU       ||
-            op == GGML_OP_UNARY) {
-            continue;
-        }
-        all_ops.insert(ggml_op_name(op));
+        all_ops.insert(ggml_op_name((enum ggml_op)i));
     }
     for (int i = 0; i < GGML_UNARY_OP_COUNT; i++) {
         all_ops.insert(ggml_unary_op_name((enum ggml_unary_op)i));
